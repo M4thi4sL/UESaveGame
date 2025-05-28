@@ -8,7 +8,11 @@
 
 #include "EngineUtils.h"
 
-void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+DEFINE_LOG_CATEGORY_STATIC(LogSaveGameSubsystem, Log, All);
+
+using namespace UE::Tasks;
+
+void USaveGameSubsystem::Initialize(FSubsystemCollectionBase &Collection)
 {
 	FWorldDelegates::OnPostWorldInitialization.AddUObject(this, &ThisClass::OnWorldInitialized);
 	FWorldDelegates::OnWorldInitializedActors.AddUObject(this, &ThisClass::OnActorsInitialized);
@@ -18,8 +22,7 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// FWorldDelegates::LevelAddedToWorld and FWorldDelegates::PreLevelRemovedFromWorld
 	// In these, we'd store the current state of actors within that level
 
-	FWorldDelegates::LevelAddedToWorld.AddUObject(this, &ThisClass::OnLevelAddedToWorld);
-	FWorldDelegates::PreLevelRemovedFromWorld.AddUObject(this, &ThisClass::OnPreLevelRemovedFromWorld);
+	OnWorldInitialized(GetWorld(), UWorld::InitializationValues());
 }
 
 void USaveGameSubsystem::Deinitialize()
@@ -27,58 +30,78 @@ void USaveGameSubsystem::Deinitialize()
 	FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
 	FWorldDelegates::OnWorldInitializedActors.RemoveAll(this);
 	FWorldDelegates::OnWorldCleanup.RemoveAll(this);
-	
+
 	FWorldDelegates::LevelAddedToWorld.RemoveAll(this);
 	FWorldDelegates::PreLevelRemovedFromWorld.RemoveAll(this);
 }
 
-bool USaveGameSubsystem::Save()
+void USaveGameSubsystem::Save(FString SaveName)
 {
-	TSaveGameSerializer<false> BinarySerializer(this);
-	bool bSuccess = BinarySerializer.Save();
+	constexpr TCHAR RegionName[] = TEXT("SaveGame[Save]");
+	UE_LOG(LogSaveGameSubsystem, Log, TEXT("%s: Begin"), RegionName);
+	TRACE_BEGIN_REGION(RegionName);
 
-#if !UE_BUILD_SHIPPING && WITH_TEXT_ARCHIVE_SUPPORT
-	// This is for debug purposes only, we want to use binary serialization for smallest file sizes
-	TSaveGameSerializer<false, true> TextSerializer(this);
-	bSuccess &= TextSerializer.Save();
-#endif
-	
-	return bSuccess;
+	TSharedPtr<TSaveGameSerializer<false>> Serializer = MakeShared<TSaveGameSerializer<false>>(this, SaveName);
+	SaveGamePipe.Launch(UE_SOURCE_LOCATION, [this, Serializer]
+						{
+		FTask Previous = Serializer->DoOperation();
+
+		// This will also keep the Serializer alive until we're complete
+		AddNested(Launch(UE_SOURCE_LOCATION, [Serializer] () mutable
+		{
+			Serializer.Reset();
+			TRACE_END_REGION(RegionName);
+			UE_LOG(LogSaveGameSubsystem, Log, TEXT("%s: End"), RegionName);
+		}, Previous)); });
 }
 
-bool USaveGameSubsystem::Load()
+void USaveGameSubsystem::Load(FString SaveName)
 {
-	const TSharedRef<TSaveGameSerializer<true>> BinarySerializer = MakeShared<TSaveGameSerializer<true>>(this); 
-	CurrentSerializer = BinarySerializer.ToSharedPtr();
-	return BinarySerializer->Load();
+	constexpr TCHAR RegionName[] = TEXT("SaveGame[Load]");
+	UE_LOG(LogSaveGameSubsystem, Log, TEXT("%s: Begin"), RegionName);
+	TRACE_BEGIN_REGION(RegionName);
+
+	TSharedPtr<TSaveGameSerializer<true>> Serializer = MakeShared<TSaveGameSerializer<true>>(this, SaveName);
+
+	SaveGamePipe.Launch(UE_SOURCE_LOCATION, [this, Serializer]
+						{
+		FTask Previous = Serializer->DoOperation();
+
+		// This will also keep the Serializer alive until we're complete
+		AddNested(Launch(UE_SOURCE_LOCATION, [Serializer] () mutable
+		{
+			Serializer.Reset();
+			TRACE_END_REGION(RegionName);
+			UE_LOG(LogSaveGameSubsystem, Log, TEXT("%s: End"), RegionName);
+		}, Previous)); });
 }
 
 bool USaveGameSubsystem::IsLoadingSaveGame() const
 {
-	return CurrentSerializer.IsValid();
+	return SaveGamePipe.HasWork();
 }
 
-void USaveGameSubsystem::OnWorldInitialized(UWorld* World, const UWorld::InitializationValues)
+void USaveGameSubsystem::OnWorldInitialized(UWorld *World, const UWorld::InitializationValues)
 {
 	if (!IsValid(World) || GetWorld() != World)
 	{
 		return;
 	}
-	
+
 	World->AddOnActorPreSpawnInitialization(FOnActorSpawned::FDelegate::CreateUObject(this, &ThisClass::OnActorPreSpawn));
 	World->AddOnActorDestroyedHandler(FOnActorDestroyed::FDelegate::CreateUObject(this, &ThisClass::OnActorDestroyed));
 }
 
-void USaveGameSubsystem::OnActorsInitialized(const FActorsInitializedParams& Params)
+void USaveGameSubsystem::OnActorsInitialized(const FActorsInitializedParams &Params)
 {
 	if (!IsValid(Params.World) || GetWorld() != Params.World)
 	{
 		return;
 	}
-	
+
 	for (TActorIterator<AActor> It(Params.World); It; ++It)
 	{
-		AActor* Actor = *It;
+		AActor *Actor = *It;
 		if (IsValid(Actor) && Actor->Implements<USaveGameObject>())
 		{
 			SaveGameActors.Add(Actor);
@@ -86,26 +109,18 @@ void USaveGameSubsystem::OnActorsInitialized(const FActorsInitializedParams& Par
 	}
 }
 
-void USaveGameSubsystem::OnWorldCleanup(UWorld* World, bool, bool)
+void USaveGameSubsystem::OnWorldCleanup(UWorld *World, bool, bool)
 {
 	if (!IsValid(World) || GetWorld() != World)
 	{
 		return;
 	}
-	
+
 	SaveGameActors.Reset();
 	DestroyedLevelActors.Reset();
 }
 
-void USaveGameSubsystem::OnLevelAddedToWorld(ULevel* Level, UWorld* World)
-{
-}
-
-void USaveGameSubsystem::OnPreLevelRemovedFromWorld(ULevel* Level, UWorld* World)
-{
-}
-
-void USaveGameSubsystem::OnActorPreSpawn(AActor* Actor)
+void USaveGameSubsystem::OnActorPreSpawn(AActor *Actor)
 {
 	if (IsValid(Actor) && Actor->Implements<USaveGameObject>())
 	{
@@ -113,7 +128,7 @@ void USaveGameSubsystem::OnActorPreSpawn(AActor* Actor)
 	}
 }
 
-void USaveGameSubsystem::OnActorDestroyed(AActor* Actor)
+void USaveGameSubsystem::OnActorDestroyed(AActor *Actor)
 {
 	SaveGameActors.Remove(Actor);
 
@@ -121,9 +136,4 @@ void USaveGameSubsystem::OnActorDestroyed(AActor* Actor)
 	{
 		DestroyedLevelActors.Add(Actor);
 	}
-}
-
-void USaveGameSubsystem::OnLoadCompleted()
-{
-	CurrentSerializer = nullptr;
 }

@@ -3,13 +3,15 @@
 #include "SaveGameFunctionLibrary.h"
 
 #include "SaveGameSettings.h"
+#include "SaveGameThreading.h"
+#include "Formatters/JsonOutputArchiveFormatter.h"
 
 #if WITH_EDITOR
+#include "Blueprint/BlueprintExceptionInfo.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Kismet2/KismetDebugUtilities.h"
 #include "Logging/MessageLog.h"
 #include "Misc/UObjectToken.h"
-#include "Blueprint/BlueprintExceptionInfo.h"
 
 void BreakpointWithError(FFrame& Stack, const FText& Text)
 {
@@ -60,55 +62,41 @@ bool USaveGameFunctionLibrary::SerializeActorTransform(FSaveGameArchive& Archive
 	{
 		const bool bIsMovable = Actor->IsRootComponentMovable();
 		const bool bIsLoading = Archive.GetRecord().GetUnderlyingArchive().IsLoading();
-		const bool bIsTextFormat = Archive.GetRecord().GetUnderlyingArchive().IsTextFormat();
 
+		// Save into a slot only if the actor is movable
 		return (bIsLoading || bIsMovable) && Archive.SerializeField(TEXT("ActorTransform"), [&](FStructuredArchive::FSlot Slot)
 		{
-			// Default binary format (efficient)
-			if (!bIsTextFormat)
+			FTransform ActorTransform;
+
+			if (!bIsLoading)
 			{
-				FTransform Transform;
-
-				if (!bIsLoading)
-				{
-					Transform = Actor->GetActorTransform();
-				}
-
-				Slot << Transform;
-
-				if (bIsLoading && bIsMovable)
-				{
-					Actor->SetActorTransform(Transform, false, nullptr, ETeleportType::TeleportPhysics);
-				}
+				ActorTransform = Actor->GetActorTransform();
 			}
-			else // Custom text format for readability
+
+			// Serialize the transform
+			Slot << ActorTransform;
+
+			if (bIsLoading && bIsMovable)
 			{
-				FVector Location;
-
-				if (!bIsLoading)
+				auto SetActorTransform = [Actor = TWeakObjectPtr<AActor>(Actor), ActorTransform]
 				{
-					Location = Actor->GetActorLocation();
-				}
+					QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_SetActorTransform);
 
-				FStructuredArchive::FRecord TransformRecord = Slot.EnterRecord();
+					// If the actor is movable, set its transform
+					if (Actor.IsValid())
+					{
+						Actor->SetActorTransform(ActorTransform, false, nullptr, ETeleportType::TeleportPhysics);
+					}
+				};
 
-				if (!bIsLoading)
+				if (IsInGameThread())
 				{
-					TransformRecord << SA_VALUE(TEXT("X"), Location.X);
-					TransformRecord << SA_VALUE(TEXT("Y"), Location.Y);
-					TransformRecord << SA_VALUE(TEXT("Z"), Location.Z);
+					// We're already in the game thread, execute immediately
+					SetActorTransform();
 				}
 				else
 				{
-					double X = 0, Y = 0, Z = 0;
-					TransformRecord << SA_VALUE(TEXT("X"), X);
-					TransformRecord << SA_VALUE(TEXT("Y"), Y);
-					TransformRecord << SA_VALUE(TEXT("Z"), Z);
-
-					if (bIsMovable)
-					{
-						Actor->SetActorLocation(FVector(X, Y, Z), false, nullptr, ETeleportType::TeleportPhysics);
-					}
+					ISaveGameThreadQueue::Get().AddTask(Forward<ISaveGameThreadQueue::FTaskFunction>(SetActorTransform));
 				}
 			}
 		});
@@ -188,4 +176,54 @@ int32 USaveGameFunctionLibrary::UseCustomVersion(FSaveGameArchive& Archive, cons
 	}
 
 	return INDEX_NONE;
+}
+
+void USaveGameFunctionLibrary::CallOnGameThread(int32 Delegate)
+{
+	// Shouldn't ever get to here
+	check(false);
+}
+
+DEFINE_FUNCTION(USaveGameFunctionLibrary::execCallOnGameThread)
+{
+	P_GET_PROPERTY(FDelegateProperty, Delegate);
+
+	check(Delegate.IsBound());
+
+	const UFunction* Function = Delegate.GetUObject()->FindFunctionChecked(Delegate.GetFunctionName());
+
+	void* Data = FMemory::Malloc(Function->ParmsSize);
+
+	for (const FProperty* Property = (FProperty*)(Function->ChildProperties); *Stack.Code != EX_EndFunctionParms; Property = (FProperty*)(Property->Next))
+	{
+		void* PropAddress = Property->ContainerPtrToValuePtr<uint8>(Data);
+		Stack.StepCompiledIn(PropAddress, Property->GetClass());
+	}
+
+	P_FINISH;
+
+	P_NATIVE_BEGIN;
+	auto ProcessDelegate = [Delegate, Data]
+	{
+		QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_CallOnGameThread_ThreadTask);
+
+		if (Delegate.GetUObject())
+		{
+			Delegate.ProcessDelegate<UObject>(Data);
+		}
+
+		FMemory::Free(Data);
+	};
+
+	if (IsInGameThread())
+	{
+		// We're already in the game thread, execute immediately
+		ProcessDelegate();
+	}
+	else
+	{
+		ISaveGameThreadQueue::Get().AddTask(Forward<ISaveGameThreadQueue::FTaskFunction>(ProcessDelegate));
+	}
+
+	P_NATIVE_END;
 }
