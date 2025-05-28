@@ -22,17 +22,21 @@ public:
  *
  * Archive data structured like so:
  * - Header
- *		- Map Name
  *		- Engine Versions
- * - Actors
- *		- Actor Name #1:
- *			- Class: If spawned
- *			- SpawnID: If implements ISaveGameSpawnActor
- *			- SaveGame Properties
- *			- Data written by ISaveGameObject::OnSerialize
- *		- ...
- * - Destroyed Level Actors
- *		- Actor Name #1
+ *		- Timestamp
+ *		- Last Visited map
+ * - World
+ *		- Map
+ *			- Actors
+ *				- Actor Name #1:
+ *					- Class: If spawned
+ *					- SpawnID: If implements ISaveGameSpawnActor
+ *					- SaveGame Properties
+ *					- Custom Data written by ISaveGameObject::OnSerialize
+ *				- ...
+ *			- Destroyed Level Actors
+ *				- Actor Name #1
+ *				- ...
  *		- ...
  * - Versions
  *		- Version:
@@ -40,6 +44,8 @@ public:
  *			- Version Number
  *		- ...
  */
+
+
 template<bool bIsLoading, bool bIsTextFormat = false>
 class TSaveGameSerializer final : public FSaveGameSerializer
 {
@@ -67,7 +73,7 @@ private:
 	void SerializeHeader();
 
 	/**
-	 * Serializes all of the actors that the SaveGameSubsystem is keeping track of.
+	 * Serializes all the actors that the SaveGameSubsystem is keeping track of.
 	 * On load, it will also pre-spawn any actors and map any actors with Spawn IDs
 	 * before running the actual serialization step.
 	 */
@@ -84,7 +90,7 @@ private:
 
 	/**
 	 * Serializes the actor's data into the structured archive.
-	 * This data always comprises of the actor's object name, and optionally its:
+	 * This data always comprises the actor's object name, and optionally its:
 	 * - Class: If the actor was spawned (so that it can be spawned again)
 	 * - SpawnID: If the actor implements ISaveGameSpawnActor. A unique identifier to map the data back to an already
 	 *				spawned actor (like the player's character)
@@ -108,6 +114,8 @@ private:
 	FStructuredArchive::FSlot RootSlot;
 	FStructuredArchive::FRecord RootRecord;
 
+	FDateTime SaveTimestamp;
+	FString SaveTimestampString;
 	FString MapName;
 	uint64 VersionOffset;
 };

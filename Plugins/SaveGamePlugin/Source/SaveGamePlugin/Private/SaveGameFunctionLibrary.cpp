@@ -60,24 +60,56 @@ bool USaveGameFunctionLibrary::SerializeActorTransform(FSaveGameArchive& Archive
 	{
 		const bool bIsMovable = Actor->IsRootComponentMovable();
 		const bool bIsLoading = Archive.GetRecord().GetUnderlyingArchive().IsLoading();
+		const bool bIsTextFormat = Archive.GetRecord().GetUnderlyingArchive().IsTextFormat();
 
-		// Save into a slot only if the actor is movable
 		return (bIsLoading || bIsMovable) && Archive.SerializeField(TEXT("ActorTransform"), [&](FStructuredArchive::FSlot Slot)
 		{
-			FTransform ActorTransform;
-
-			if (!bIsLoading)
+			// Default binary format (efficient)
+			if (!bIsTextFormat)
 			{
-				ActorTransform = Actor->GetActorTransform();
+				FTransform Transform;
+
+				if (!bIsLoading)
+				{
+					Transform = Actor->GetActorTransform();
+				}
+
+				Slot << Transform;
+
+				if (bIsLoading && bIsMovable)
+				{
+					Actor->SetActorTransform(Transform, false, nullptr, ETeleportType::TeleportPhysics);
+				}
 			}
-
-			// Serialize the transform
-			Slot << ActorTransform;
-
-			if (bIsLoading && bIsMovable)
+			else // Custom text format for readability
 			{
-				// If the actor is movable, set its transform
-				Actor->SetActorTransform(ActorTransform, false, nullptr, ETeleportType::TeleportPhysics);
+				FVector Location;
+
+				if (!bIsLoading)
+				{
+					Location = Actor->GetActorLocation();
+				}
+
+				FStructuredArchive::FRecord TransformRecord = Slot.EnterRecord();
+
+				if (!bIsLoading)
+				{
+					TransformRecord << SA_VALUE(TEXT("X"), Location.X);
+					TransformRecord << SA_VALUE(TEXT("Y"), Location.Y);
+					TransformRecord << SA_VALUE(TEXT("Z"), Location.Z);
+				}
+				else
+				{
+					double X = 0, Y = 0, Z = 0;
+					TransformRecord << SA_VALUE(TEXT("X"), X);
+					TransformRecord << SA_VALUE(TEXT("Y"), Y);
+					TransformRecord << SA_VALUE(TEXT("Z"), Z);
+
+					if (bIsMovable)
+					{
+						Actor->SetActorLocation(FVector(X, Y, Z), false, nullptr, ETeleportType::TeleportPhysics);
+					}
+				}
 			}
 		});
 	}

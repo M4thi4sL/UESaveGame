@@ -18,7 +18,8 @@ void USaveGameSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// FWorldDelegates::LevelAddedToWorld and FWorldDelegates::PreLevelRemovedFromWorld
 	// In these, we'd store the current state of actors within that level
 
-	OnWorldInitialized(GetWorld(), UWorld::InitializationValues());
+	FWorldDelegates::LevelAddedToWorld.AddUObject(this, &ThisClass::OnLevelAddedToWorld);
+	FWorldDelegates::PreLevelRemovedFromWorld.AddUObject(this, &ThisClass::OnPreLevelRemovedFromWorld);
 }
 
 void USaveGameSubsystem::Deinitialize()
@@ -94,6 +95,14 @@ void USaveGameSubsystem::OnWorldCleanup(UWorld* World, bool, bool)
 	
 	SaveGameActors.Reset();
 	DestroyedLevelActors.Reset();
+}
+
+void USaveGameSubsystem::OnLevelAddedToWorld(ULevel* Level, UWorld* World)
+{
+}
+
+void USaveGameSubsystem::OnPreLevelRemovedFromWorld(ULevel* Level, UWorld* World)
+{
 }
 
 void USaveGameSubsystem::OnActorPreSpawn(AActor* Actor)

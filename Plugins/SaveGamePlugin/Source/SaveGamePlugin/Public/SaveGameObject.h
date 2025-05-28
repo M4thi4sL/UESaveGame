@@ -10,7 +10,7 @@
  * The blueprint representation of the structured record we're writing to.
  *
  * When serializing a binary archive, FSaveGameArchive on construction will store its initial position that it started
- * serializing from. Once FSaveGameArchive loses scope and calls its destructor, it will then serialize all of the
+ * serializing from. Once FSaveGameArchive loses scope and calls its destructor, it will then serialize all the
  * field names and their offsets, if loading, it will automatically seek to the very end of the archive. The initial
  * position and stored offsets can be used for out-of-order seeking to each of the archive's serialized fields.
  *
@@ -126,7 +126,7 @@ class SAVEGAMEPLUGIN_API ISaveGameObject
 public:
 	/**
 	 * Called after an object's SaveGame properties are serialized. Useful for serializing fields that can't be marked
-	 * with the SaveGame specifier (i.e. engine properties like transforms, velocity, etc). This method can also be
+	 * with the SaveGame specifier (i.e. engine properties like transforms, velocity, etc.). This method can also be
 	 * implemented as a "PostSerialize" event for this object.
 	 * 
 	 * @param Archive The archive that fields will be serialized to/from

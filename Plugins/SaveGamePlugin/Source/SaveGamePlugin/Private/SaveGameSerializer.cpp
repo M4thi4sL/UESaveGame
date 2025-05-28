@@ -210,6 +210,14 @@ void TSaveGameSerializer<bIsLoading, bIsTextFormat>::SerializeHeader()
 	{
 		EngineVersion = FEngineVersion::Current();
 		PackageVersion = GPackageFileUEVersion;
+
+		// Set timestamp fields
+		SaveTimestamp = FDateTime::UtcNow();
+
+		if constexpr (bIsTextFormat) // Compile-time conditional
+		{
+			SaveTimestampString = SaveTimestamp.ToIso8601();
+		}
 	}
 
 	RootRecord << SA_VALUE(TEXT("EngineVersion"), EngineVersion);
@@ -222,6 +230,11 @@ void TSaveGameSerializer<bIsLoading, bIsTextFormat>::SerializeHeader()
 		// We're a binary archive, so let's serialize where the version is
 		// so that we can read it before loading anything
 		RootRecord << SA_VALUE(TEXT("VersionsOffset"), VersionOffset);
+		RootRecord << SA_VALUE(TEXT("SaveTimestamp"), SaveTimestamp);
+	}
+	else
+	{
+		RootRecord << SA_VALUE(TEXT("SaveTimestamp"), SaveTimestampString);
 	}
 
 	if (bIsLoading)
@@ -236,7 +249,7 @@ void TSaveGameSerializer<bIsLoading, bIsTextFormat>::SerializeActors()
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_SerializeActors);
 	
-	// This serialize method assumes that we don't have any streamed/sub levels
+	// This serializes method assumes that we don't have any streamed/sublevels
 	check(SaveGameSubsystem.IsValid());
 	UWorld* World = SaveGameSubsystem->GetWorld();
 	const FTopLevelAssetPath LevelAssetPath(World->GetCurrentLevel()->GetPackage()->GetFName(), World->GetCurrentLevel()->GetOuter()->GetFName());
@@ -463,7 +476,8 @@ void TSaveGameSerializer<bIsLoading, bIsTextFormat>::SerializeActor(FStructuredA
 
 	if (!bIsLoading)
 	{
-		ActorName = Actor->GetName();
+		if (!bIsTextFormat) ActorName = Actor->GetName();
+		else ActorName = Actor->GetActorLabel();
 				
 		if (!USaveGameFunctionLibrary::WasObjectLoaded(Actor))
 		{
@@ -503,7 +517,7 @@ void TSaveGameSerializer<bIsLoading, bIsTextFormat>::SerializeActor(FStructuredA
 	const uint64 BeginDataPosition = Archive.Tell();
 
 	BodyFunction(ActorName, Class, SpawnID, ActorSlot);
-
+	
 	if (!bIsTextFormat)
 	{
 		if (bIsLoading)

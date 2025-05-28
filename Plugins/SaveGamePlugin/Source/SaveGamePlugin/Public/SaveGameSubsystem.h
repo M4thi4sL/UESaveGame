@@ -31,7 +31,8 @@ protected:
 	void OnWorldInitialized(UWorld* World, const UWorld::InitializationValues);
 	void OnActorsInitialized(const FActorsInitializedParams& Params);
 	void OnWorldCleanup(UWorld* World, bool, bool);
-	
+	void OnLevelAddedToWorld(ULevel* Level, UWorld* World);
+	void OnPreLevelRemovedFromWorld(ULevel* Level, UWorld* World);
 	void OnActorPreSpawn(AActor* Actor);
 	void OnActorDestroyed(AActor* Actor);
 
