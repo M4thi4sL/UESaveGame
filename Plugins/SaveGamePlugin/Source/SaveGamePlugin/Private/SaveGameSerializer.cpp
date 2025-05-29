@@ -35,27 +35,31 @@ class FSaveGameArchiveFormatter : public FProxyArchiveFormatter
 public:
 	FSaveGameArchiveFormatter(FArchive& InnerArchive, bool bUseNull)
 		: FProxyArchiveFormatter(BinaryFormatter,
-			static_cast<FStructuredArchiveFormatter&>(bUseNull ? FNullArchiveFormatter::Get() : JsonFormatter))
-		, BinaryFormatter(InnerArchive)
-	{}
+		                         static_cast<FStructuredArchiveFormatter&>(bUseNull
+			                                                                   ? FNullArchiveFormatter::Get()
+			                                                                   : JsonFormatter))
+		  , BinaryFormatter(InnerArchive)
+	{
+	}
 
 	FBinaryArchiveFormatter BinaryFormatter;
 	FJsonOutputArchiveFormatter JsonFormatter;
 };
 #endif
 
-template<bool bIsLoading>
+template <bool bIsLoading>
 class TSaveGameArchive
 {
 	using FSaveGameFormatter =
-		typename TChooseClass<USE_TEXT_FORMATTER, class FSaveGameArchiveFormatter, FBinaryArchiveFormatter>::Result;
+	typename TChooseClass<USE_TEXT_FORMATTER, class FSaveGameArchiveFormatter, FBinaryArchiveFormatter>::Result;
 
 public:
 	TSaveGameArchive(FArchive& InArchive, TMap<FSoftObjectPath, FSoftObjectPath>& InRedirects)
 		: ProxyArchive(InArchive, InRedirects)
-		, Formatter(ProxyArchive, bIsLoading)
-		, ArchiveData(nullptr)
-	{}
+		  , Formatter(ProxyArchive, bIsLoading)
+		  , ArchiveData(nullptr)
+	{
+	}
 
 	~TSaveGameArchive()
 	{
@@ -114,8 +118,8 @@ private:
 	{
 		FStructuredArchiveData(FStructuredArchiveFormatter& InFormatter)
 			: StructuredArchive(InFormatter)
-			, RootSlot(StructuredArchive.Open())
-			, RootRecord(RootSlot.EnterRecord())
+			  , RootSlot(StructuredArchive.Open())
+			  , RootRecord(RootSlot.EnterRecord())
 		{
 		}
 
@@ -127,7 +131,7 @@ private:
 	FStructuredArchiveData* ArchiveData;
 };
 
-template<bool bLoading>
+template <bool bLoading>
 FORCEINLINE_DEBUGGABLE void SerializeCompressedData(FArchive& Ar, TArray<uint8>& Data)
 {
 	check(Ar.IsLoading() == bLoading);
@@ -183,14 +187,80 @@ private:
 };
 
 template <bool bIsLoading>
+struct TSaveGameSerializer<bIsLoading>::FLevelInfo
+{
+	~FLevelInfo()
+	{
+		if (Archive)
+		{
+			delete Archive;
+			Archive = nullptr;
+		}
+
+		if (MemoryArchive)
+		{
+			delete MemoryArchive;
+			MemoryArchive = nullptr;
+		}
+	}
+
+	void CreateArchive(TArray<uint8>& InData, TMap<FSoftObjectPath, FSoftObjectPath>& InRedirects)
+	{
+		MemoryArchive = new TSaveGameMemoryArchive(InData);
+		Archive = new TSaveGameArchive<bIsLoading>(*MemoryArchive, InRedirects);
+	}
+
+	TWeakObjectPtr<ULevel> Level;
+	FString Name;
+	TArray<uint8> Data; /** This would contain the serialised LevelActors and the Destroyed ones */
+	TSaveGameArchive<bIsLoading>* Archive = nullptr;
+
+private:
+	FArchive* MemoryArchive = nullptr;
+};
+
+template <bool bIsLoading>
+struct TSaveGameSerializer<bIsLoading>::FWorldInfo
+{
+	~FWorldInfo()
+	{
+		if (Archive)
+		{
+			delete Archive;
+			Archive = nullptr;
+		}
+
+		if (MemoryArchive)
+		{
+			delete MemoryArchive;
+			MemoryArchive = nullptr;
+		}
+	}
+
+	void CreateArchive(TArray<uint8>& InData, TMap<FSoftObjectPath, FSoftObjectPath>& InRedirects)
+	{
+		MemoryArchive = new TSaveGameMemoryArchive(InData);
+		Archive = new TSaveGameArchive<bIsLoading>(*MemoryArchive, InRedirects);
+	}
+
+	TWeakObjectPtr<UWorld> World;
+	FString Name;
+	TArray<uint8> Data; /** This would contain the serialised LevelActors and the Destroyed ones */
+	TSaveGameArchive<bIsLoading>* Archive = nullptr;
+
+private:
+	FArchive* MemoryArchive = nullptr;
+};
+
+template <bool bIsLoading>
 TSaveGameSerializer<bIsLoading>::TSaveGameSerializer(USaveGameSubsystem* InSubsystem, FString SaveName)
 	: Subsystem(InSubsystem)
-	, Archive(Data)
-	, SaveArchive(new TSaveGameArchive<bIsLoading>(Archive, Redirects))
-	, ActorOffsetsOffset(0)
-	, VersionOffset(0)
-	, ActorsOffset(0)
-	, SaveName(MoveTemp(SaveName))
+	  , Archive(Data)
+	  , SaveArchive(new TSaveGameArchive<bIsLoading>(Archive, Redirects))
+	  , ActorOffsetsOffset(0)
+	  , VersionOffset(0)
+	  , ActorsOffset(0)
+	  , SaveName(MoveTemp(SaveName))
 {
 	// Ensure that we're using the latest save game version
 	Archive.UsingCustomVersion(FSaveGameVersion::GUID);
@@ -238,7 +308,7 @@ FTask TSaveGameSerializer<bIsLoading>::DoOperation()
 			{
 				UWorld* World = Subsystem->GetWorld();
 
-				check(!MapName.IsEmpty());
+				check(!LastVisitedMap.IsEmpty());
 				check(!World->IsInSeamlessTravel());
 
 				// When our map has loaded, continue the serialization process
@@ -250,7 +320,7 @@ FTask TSaveGameSerializer<bIsLoading>::DoOperation()
 					check(RemovedCount == 1);
 				});
 
-				World->SeamlessTravel(MapName, true);
+				World->SeamlessTravel(LastVisitedMap, true);
 			}, PreviousTask);
 
 			// Our next task should wait for the map to be loaded
@@ -259,6 +329,7 @@ FTask TSaveGameSerializer<bIsLoading>::DoOperation()
 
 		PreviousTask = LaunchGameThread(UE_SOURCE_LOCATION, [this]
 		{
+			/** Should probably dump the current world we are serializing first and foremeost, then store te destroyted and actors one level deeper */
 			SerializeDestroyedActors();
 			SerializeActors();
 		}, PreviousTask);
@@ -290,8 +361,11 @@ FTask TSaveGameSerializer<bIsLoading>::DoOperation()
 			{
 				TArray<uint8> JsonData;
 				FMemoryWriter WriterArchive(JsonData);
-				TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&WriterArchive);
-				FJsonSerializer::Serialize(reinterpret_cast<FSaveGameArchiveFormatter&>(SaveArchive->Formatter).JsonFormatter.GetRoot(), Writer);
+				TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<
+					TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&WriterArchive);
+				FJsonSerializer::Serialize(
+					reinterpret_cast<FSaveGameArchiveFormatter&>(SaveArchive->Formatter).JsonFormatter.GetRoot(),
+					Writer);
 
 				SaveSystem->SaveGame(false, *(GetSaveName() + TEXT(".json")), 0, JsonData);
 			}, PreviousTask));
@@ -308,7 +382,9 @@ FTask TSaveGameSerializer<bIsLoading>::DoOperation()
 				check(bSaved);
 			}, PreviousTask));
 
-			PreviousTask = Launch(UE_SOURCE_LOCATION, []{}, Prerequisites(FinishEvents), ETaskPriority::Default, EExtendedTaskPriority::Inline);
+			PreviousTask = Launch(UE_SOURCE_LOCATION, []
+			{
+			}, Prerequisites(FinishEvents), ETaskPriority::Default, EExtendedTaskPriority::Inline);
 		}
 
 		return PreviousTask;
@@ -316,7 +392,6 @@ FTask TSaveGameSerializer<bIsLoading>::DoOperation()
 
 	return MakeCompletedTask<void>();
 }
-
 
 template <bool bIsLoading>
 void TSaveGameSerializer<bIsLoading>::SerializeVersionOffset()
@@ -333,17 +408,21 @@ void TSaveGameSerializer<bIsLoading>::SerializeHeader()
 
 	FEngineVersion EngineVersion;
 	FPackageFileVersion PackageVersion;
+	FDateTime Timestamp;
 
 	if (!bIsLoading)
 	{
 		EngineVersion = FEngineVersion::Current();
 		PackageVersion = GPackageFileUEVersion;
+		Timestamp = FDateTime::UtcNow();
+		Subsystem->SetLastSaveTimestamp(Timestamp);
 	}
 
 	FStructuredArchive::FRecord& Record = SaveArchive->GetRecord();
 
 	Record << SA_VALUE(TEXT("EngineVersion"), EngineVersion);
 	Record << SA_VALUE(TEXT("PackageVersion"), PackageVersion);
+	Record << SA_VALUE(TEXT("TimeStamp"), Timestamp);
 
 	if (bIsLoading)
 	{
@@ -352,15 +431,15 @@ void TSaveGameSerializer<bIsLoading>::SerializeHeader()
 	}
 
 	// If we already have a map name, don't change it
-	if (!bIsLoading && MapName.IsEmpty())
+	if (!bIsLoading && LastVisitedMap.IsEmpty())
 	{
-		MapName = Subsystem->GetWorld()->GetOutermost()->GetLoadedPath().GetPackageName();
+		LastVisitedMap = Subsystem->GetWorld()->GetOutermost()->GetLoadedPath().GetPackageName();
 	}
 
-	Record << SA_VALUE(TEXT("Map"), MapName);
+	Record << SA_VALUE(TEXT("LastVisitedMap"), LastVisitedMap);
 }
 
-template<typename FuncType>
+template <typename FuncType>
 void ExecuteJobs(const int32 NumJobs, TStatId StatId, FuncType&& Job)
 {
 	FSaveGameTheadScope GameThreadScope;
@@ -394,7 +473,7 @@ void ExecuteJobs(const int32 NumJobs, TStatId StatId, FuncType&& Job)
 	check(CompletedJobs.Load() >= NumJobs);
 }
 
-template<bool bIsLoading>
+template <bool bIsLoading>
 void TSaveGameSerializer<bIsLoading>::SerializeActors()
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_SerializeActors);
@@ -404,7 +483,8 @@ void TSaveGameSerializer<bIsLoading>::SerializeActors()
 
 	// This serializes method assumes that we don't have any streamed/sublevels
 	const UWorld* World = Subsystem->GetWorld();
-	LevelAssetPath = FTopLevelAssetPath(World->GetCurrentLevel()->GetPackage()->GetFName(), World->GetCurrentLevel()->GetOuter()->GetFName());
+	LevelAssetPath = FTopLevelAssetPath(World->GetCurrentLevel()->GetPackage()->GetFName(),
+	                                    World->GetCurrentLevel()->GetOuter()->GetFName());
 
 	SaveGameActors = Subsystem->SaveGameActors.Array();
 	int32 NumActors = SaveGameActors.Num();
@@ -445,14 +525,16 @@ void TSaveGameSerializer<bIsLoading>::SerializeActors()
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_InitializeActors);
 
-		ExecuteJobs(NumActors, GET_STATID(STAT_SaveGame_InitializeActors), [this] (int32 ActorIdx) { InitializeActor(ActorIdx); });
+		ExecuteJobs(NumActors, GET_STATID(STAT_SaveGame_InitializeActors),
+		            [this](int32 ActorIdx) { InitializeActor(ActorIdx); });
 	}
 
 	// Actually do the serialization of each actor (now that we've updated redirects)
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_Serialize);
 
-		ExecuteJobs(NumActors, GET_STATID(STAT_SaveGame_Serialize), [this] (int32 ActorIdx) { SerializeActor(ActorIdx); });
+		ExecuteJobs(NumActors, GET_STATID(STAT_SaveGame_Serialize),
+		            [this](int32 ActorIdx) { SerializeActor(ActorIdx); });
 	}
 
 	if (bIsLoading)
@@ -489,14 +571,6 @@ void TSaveGameSerializer<bIsLoading>::InitializeActor(int32 ActorIdx)
 
 		// When saving, we need to dump the data into
 		ActorInfo.CreateArchive(ActorInfo.Data, Redirects);
-
-		/** When saving dumping Actorlabel in editor-only for easier debugging of json data
-		#if WITH_EDITOR
-				FString ActorLabel = ActorInfo.Actor->GetActorLabel();
-				FStructuredArchive::FRecord& Record = ActorInfo.Archive->GetRecord();
-				Record.EnterField(TEXT("ActorLabel")) << ActorLabel;
-		#endif
-		*/
 
 		if (!USaveGameFunctionLibrary::WasObjectLoaded(ActorInfo.Actor.Get()))
 		{
@@ -577,7 +651,8 @@ void TSaveGameSerializer<bIsLoading>::InitializeActor(int32 ActorIdx)
 
 				// We potentially have a spawned actor that other actors reference
 				// If the name has changed, be sure to redirect the old actor path to the new one
-				ActorInfo.Archive->GetArchive().AddRedirect(FSoftObjectPath(LevelAssetPath, ActorSubPath), FSoftObjectPath(Actor.Get()));
+				ActorInfo.Archive->GetArchive().AddRedirect(FSoftObjectPath(LevelAssetPath, ActorSubPath),
+				                                            FSoftObjectPath(Actor.Get()));
 			}
 		};
 
@@ -655,7 +730,8 @@ void TSaveGameSerializer<bIsLoading>::MergeSaveData()
 #if USE_TEXT_FORMATTER
 		// Merge our JSON structure into the main Save Game archive's
 		FSaveGameArchiveFormatter& Formatter = reinterpret_cast<FSaveGameArchiveFormatter&>(SaveArchive->Formatter);
-		Formatter.JsonFormatter.Serialize(reinterpret_cast<FSaveGameArchiveFormatter&>(ActorInfo.Archive->Formatter).JsonFormatter.GetRoot());
+		Formatter.JsonFormatter.Serialize(
+			reinterpret_cast<FSaveGameArchiveFormatter&>(ActorInfo.Archive->Formatter).JsonFormatter.GetRoot());
 #endif
 
 		Archive.Seek(Data.Num());
@@ -691,7 +767,8 @@ void TSaveGameSerializer<bIsLoading>::SerializeDestroyedActors()
 		NumDestroyedActors = Subsystem->DestroyedLevelActors.Num();
 	}
 
-	FStructuredArchive::FArray DestroyedActorsArray = SaveArchive->GetRecord().EnterArray(TEXT("DestroyedActors"), NumDestroyedActors);
+	FStructuredArchive::FArray DestroyedActorsArray = SaveArchive->GetRecord().EnterArray(
+		TEXT("DestroyedActors"), NumDestroyedActors);
 
 	if (bIsLoading)
 	{

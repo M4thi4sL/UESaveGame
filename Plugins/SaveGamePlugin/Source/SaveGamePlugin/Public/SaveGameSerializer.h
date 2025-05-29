@@ -20,46 +20,62 @@ public:
 };
 
 /**
- * The class that manages serializing the world.
+ * WorldSerializationManager
  *
- * Archive data structured like so:
- * - Header
- *		- Map Name
- *		- Engine Versions
- * - Actors
- *		- Actor Name #1:
- *			- Class: If spawned
- *			- SpawnID: If implements ISaveGameSpawnActor
- *			- SaveGame Properties
- *			- Data written by ISaveGameObject::OnSerialize
- *		- ...
- * - Destroyed Level Actors
- *		- Actor Name #1
- *		- ...
- * - Versions
- *		- Version:
- *			- ID
- *			- Version Number
- *		- ...
+ * Manages serialization of the world data. The archive includes:
+ * 
+ *  ─ Header
+ *     • VERSION_OFFSET
+ *     • ENGINE_VERSION
+ *     • PACKAGE_VERSION
+ * 
+ *  ─ Data
+ *     • LastVisitedMapName
+ *     • Timestamp
+ *     • WorldData
+ *       ◦ Level1
+ *         ▪ DestroyedActors
+ *         ▪ Actors
+ *           › ActorName
+ *           › Class (if spawned)
+ *           › SpawnID (if implements ISaveGameSpawnActor)
+ *           › SaveGameProperties
+ *         ▪ SubLevel1
+ *         ▪ SubLevel2
+ *         ...
+ *       ◦ Level2
+ *       ...
+ * 
+ *  ─ Versions
+ *     • VersionID
+ *     • VersionNumber
  */
+inline constexpr int VERSION_OFFSET_INDEX = 0;
+inline constexpr int ENGINE_VERSION_INDEX = 1;
+inline constexpr int PACKAGE_VERSION_INDEX = 2;
+
 template <bool bIsLoading>
 class TSaveGameSerializer final : public FSaveGameSerializer
 {
 	using TSaveGameMemoryArchive = typename TChooseClass<bIsLoading, FMemoryReader, FMemoryWriter>::Result;
 
 public:
-	TSaveGameSerializer(USaveGameSubsystem *InSaveGameSubsystem,  FString InSaveName);
+	TSaveGameSerializer(USaveGameSubsystem* InSaveGameSubsystem, FString InSaveName);
 	virtual ~TSaveGameSerializer() override;
 
 	virtual bool IsLoading() const override { return bIsLoading; }
 	virtual UE::Tasks::FTask DoOperation() override;
 
-	// Expose save name setter/getter
-	void SetSaveName(const FString &InSaveName) { SaveName = InSaveName; }
+	/** Set the archive save name */
+	void SetSaveName(const FString& InSaveName) { SaveName = InSaveName; }
+
+	/** Get the archive save name */
 	FString GetSaveName() const { return SaveName; }
 
 private:
 	struct FActorInfo;
+	struct FLevelInfo;
+	struct FWorldInfo;
 
 	void SerializeVersionOffset();
 
@@ -78,6 +94,9 @@ private:
 
 	void MergeSaveData();
 
+	/** Serializes all levels in the world */
+	void SerializeLevels();
+
 	/** Serializes any destroyed level actors. On load, level actors will exist again, so this will re-destroy them */
 	void SerializeDestroyedActors();
 
@@ -87,11 +106,11 @@ private:
 	 */
 	void SerializeVersions();
 
-	USaveGameSubsystem *Subsystem;
+	USaveGameSubsystem* Subsystem;
 	TArray<uint8> Data;
 	TSaveGameMemoryArchive Archive;
 	TMap<FSoftObjectPath, FSoftObjectPath> Redirects;
-	TSaveGameArchive<bIsLoading> *SaveArchive;
+	TSaveGameArchive<bIsLoading>* SaveArchive;
 
 	FTopLevelAssetPath LevelAssetPath;
 	TArray<uint64> ActorOffsets;
@@ -99,7 +118,6 @@ private:
 	TArray<FActorInfo> ActorData;
 	TMap<FGuid, TWeakObjectPtr<AActor>> SpawnIDs;
 
-	FString MapName;
 	FString LastVisitedMap;
 	uint64 ActorOffsetsOffset;
 	uint64 VersionOffset;
