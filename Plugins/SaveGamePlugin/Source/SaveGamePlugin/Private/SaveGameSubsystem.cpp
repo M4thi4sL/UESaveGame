@@ -106,9 +106,9 @@ void USaveGameSubsystem::OnPreWorldDestroyed(UWorld* World)
 
 void USaveGameSubsystem::OnLevelAddedToWorld(ULevel* Level, UWorld* World)
 {
-	if (SaveGameSettings->GetPrintDebug()) UE_LOG(LogSaveGameSubsystem, Log, TEXT("level '%s' added to world '%s'"),
-	                                              (Level->GetOuter() ? *Level->GetOuter()->GetName() : TEXT("NULL")),
-	                                              (World ? *World->GetName() : TEXT("NULL")));
+	if (SaveGameSettings->bPrintDebug) UE_LOG(LogSaveGameSubsystem, Log, TEXT("level '%s' added to world '%s'"),
+	                                          (Level->GetOuter() ? *Level->GetOuter()->GetName() : TEXT("NULL")),
+	                                          (World ? *World->GetName() : TEXT("NULL")));
 
 	if (!IsValid(Level) || !IsValid(World) || GetWorld() != World)
 	{
@@ -126,9 +126,9 @@ void USaveGameSubsystem::OnLevelAddedToWorld(ULevel* Level, UWorld* World)
 
 void USaveGameSubsystem::OnPreLevelRemovedFromWorld(ULevel* Level, UWorld* World)
 {
-	if (SaveGameSettings->GetPrintDebug()) UE_LOG(LogSaveGameSubsystem, Log, TEXT("level '%s' Removed from world '%s'"),
-	                                              (Level->GetOuter() ? *Level->GetOuter()->GetName() : TEXT("NULL")),
-	                                              (World ? *World->GetName() : TEXT("NULL")));
+	if (SaveGameSettings->bPrintDebug) UE_LOG(LogSaveGameSubsystem, Log, TEXT("level '%s' Removed from world '%s'"),
+	                                          (Level->GetOuter() ? *Level->GetOuter()->GetName() : TEXT("NULL")),
+	                                          (World ? *World->GetName() : TEXT("NULL")));
 
 	if (!IsValid(Level) || !IsValid(World) || GetWorld() != World)
 	{
@@ -163,9 +163,9 @@ void USaveGameSubsystem::OnWorldInitialized(UWorld* World, const UWorld::Initial
 
 void USaveGameSubsystem::OnActorsInitialized(const FActorsInitializedParams& Params)
 {
-	if (SaveGameSettings->GetPrintDebug()) UE_LOG(LogSaveGameSubsystem, Log,
-	                                              TEXT("Actors have been initialized in world: %s"),
-	                                              *Params.World->GetName());
+	if (SaveGameSettings->bPrintDebug) UE_LOG(LogSaveGameSubsystem, Log,
+	                                          TEXT("Actors have been initialized in world: %s"),
+	                                          *Params.World->GetName());
 
 	if (!IsValid(Params.World) || GetWorld() != Params.World)
 	{
