@@ -24,10 +24,10 @@ void BreakpointWithError(FFrame& Stack, const FText& Text)
 	{
 		static void OnMessageLogLinkActivated(const class TSharedRef<IMessageToken>& Token)
 		{
-			if( Token->GetType() == EMessageToken::Object )
+			if (Token->GetType() == EMessageToken::Object)
 			{
 				const TSharedRef<FUObjectToken> UObjectToken = StaticCastSharedRef<FUObjectToken>(Token);
-				if(UObjectToken->GetObject().IsValid())
+				if (UObjectToken->GetObject().IsValid())
 				{
 					FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(UObjectToken->GetObject().Get());
 				}
@@ -37,9 +37,9 @@ void BreakpointWithError(FFrame& Stack, const FText& Text)
 
 	FMessageLog MessageLog("PIE");
 	MessageLog.Error()
-		->AddToken(FUObjectToken::Create(Node, Node->GetNodeTitle(ENodeTitleType::ListView))
-			->OnMessageTokenActivated(FOnMessageTokenActivated::CreateStatic(&Local::OnMessageLogLinkActivated)))
-		->AddToken(FTextToken::Create(Text));
+	          ->AddToken(FUObjectToken::Create(Node, Node->GetNodeTitle(ENodeTitleType::ListView))
+		          ->OnMessageTokenActivated(FOnMessageTokenActivated::CreateStatic(&Local::OnMessageLogLinkActivated)))
+	          ->AddToken(FTextToken::Create(Text));
 	MessageLog.Open(EMessageSeverity::Error);
 
 	FBlueprintCoreDelegates::ThrowScriptException(Stack.Object, Stack, ExceptionInfo);
@@ -73,7 +73,7 @@ bool USaveGameFunctionLibrary::SerializeActorTransform(FSaveGameArchive& Archive
 				ActorTransform = Actor->GetActorTransform();
 			}
 
-			// Serialize the transform
+			// ObjSerialize the transform
 			Slot << ActorTransform;
 
 			if (bIsLoading && bIsMovable)
@@ -128,26 +128,26 @@ DEFINE_FUNCTION(USaveGameFunctionLibrary::execSerializeItem)
 
 	P_NATIVE_BEGIN;
 
-	*(bool*)RESULT_PARAM = false;
+		*(bool*)RESULT_PARAM = false;
 
 #if WITH_EDITOR
-	if (ValueProperty && (!ValueProperty->HasAnyPropertyFlags(CPF_Edit) || ValueProperty->HasAnyPropertyFlags(CPF_BlueprintReadOnly)))
-	{
-		BreakpointWithError(Stack,
-			FText::Format(NSLOCTEXT("SaveGame", "SerialiseItem_NotVariableException", "'{0}' connected to the Value pin is not an editable variable!"), ValueProperty->GetDisplayNameText()));
-	}
-	else
-#endif
-	if (ValueProperty && Archive.IsValid() && (IsLoading(Archive) || bSave))
-	{
-		Archive.SerializeField(ValueProperty->GetFName(), [&](FStructuredArchive::FSlot Slot)
+		if (ValueProperty && (!ValueProperty->HasAnyPropertyFlags(CPF_Edit) || ValueProperty->HasAnyPropertyFlags(CPF_BlueprintReadOnly)))
 		{
-			// Note: SerializeItem will not handle type conversions, though ConvertFromType will do this with some
-			// questionable address arithmetic
-			ValueProperty->SerializeItem(Slot, ValueAddress, nullptr);
-			*(bool*)RESULT_PARAM = true;
-		});
-	}
+			BreakpointWithError(Stack,
+			                    FText::Format(NSLOCTEXT("SaveGame", "SerialiseItem_NotVariableException", "'{0}' connected to the Value pin is not an editable variable!"), ValueProperty->GetDisplayNameText()));
+		}
+		else
+#endif
+			if (ValueProperty && Archive.IsValid() && (IsLoading(Archive) || bSave))
+			{
+				Archive.SerializeField(ValueProperty->GetFName(), [&](FStructuredArchive::FSlot Slot)
+				{
+					// Note: SerializeItem will not handle type conversions, though ConvertFromType will do this with some
+					// questionable address arithmetic
+					ValueProperty->SerializeItem(Slot, ValueAddress, nullptr);
+					*(bool*)RESULT_PARAM = true;
+				});
+			}
 
 	P_NATIVE_END;
 }
@@ -203,27 +203,27 @@ DEFINE_FUNCTION(USaveGameFunctionLibrary::execCallOnGameThread)
 	P_FINISH;
 
 	P_NATIVE_BEGIN;
-	auto ProcessDelegate = [Delegate, Data]
-	{
-		QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_CallOnGameThread_ThreadTask);
-
-		if (Delegate.GetUObject())
+		auto ProcessDelegate = [Delegate, Data]
 		{
-			Delegate.ProcessDelegate<UObject>(Data);
+			QUICK_SCOPE_CYCLE_COUNTER(STAT_SaveGame_CallOnGameThread_ThreadTask);
+
+			if (Delegate.GetUObject())
+			{
+				Delegate.ProcessDelegate<UObject>(Data);
+			}
+
+			FMemory::Free(Data);
+		};
+
+		if (IsInGameThread())
+		{
+			// We're already in the game thread, execute immediately
+			ProcessDelegate();
 		}
-
-		FMemory::Free(Data);
-	};
-
-	if (IsInGameThread())
-	{
-		// We're already in the game thread, execute immediately
-		ProcessDelegate();
-	}
-	else
-	{
-		ISaveGameThreadQueue::Get().AddTask(Forward<ISaveGameThreadQueue::FTaskFunction>(ProcessDelegate));
-	}
+		else
+		{
+			ISaveGameThreadQueue::Get().AddTask(Forward<ISaveGameThreadQueue::FTaskFunction>(ProcessDelegate));
+		}
 
 	P_NATIVE_END;
 }

@@ -94,9 +94,6 @@ private:
 
 	void MergeSaveData();
 
-	/** Serializes all levels in the world */
-	void SerializeLevels();
-
 	/** Serializes any destroyed level actors. On load, level actors will exist again, so this will re-destroy them */
 	void SerializeDestroyedActors();
 

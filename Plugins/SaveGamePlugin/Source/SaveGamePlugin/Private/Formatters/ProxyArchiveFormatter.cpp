@@ -19,9 +19,10 @@ FString Tabber(const int32 NumTabs)
 
 FProxyArchiveFormatter::FProxyArchiveFormatter(FStructuredArchiveFormatter& InPrimary, FStructuredArchiveFormatter& InSecondary)
 	: StackDepth(INDEX_NONE)
-	, Primary(InPrimary)
-	, Secondary(&InSecondary)
-{}
+	  , Primary(InPrimary)
+	  , Secondary(&InSecondary)
+{
+}
 
 FArchive& FProxyArchiveFormatter::GetUnderlyingArchive()
 {
@@ -306,6 +307,13 @@ void FProxyArchiveFormatter::Serialize(bool& Value)
 	Secondary->Serialize(Value);
 
 	UE_LOG(LogProxyArchiveFormatter, Verbose, TEXT("%llu: %s%hs Bool %i"), GetUnderlyingArchive().Tell(), *Tabber(StackDepth), __FUNCSIG__, Value);
+}
+
+void FProxyArchiveFormatter::Serialize(UTF32CHAR& Value)
+{
+	FString Utf8String;
+	Utf8String.AppendChar(Value);
+	Serialize(Utf8String);
 }
 
 void FProxyArchiveFormatter::Serialize(FString& Value)

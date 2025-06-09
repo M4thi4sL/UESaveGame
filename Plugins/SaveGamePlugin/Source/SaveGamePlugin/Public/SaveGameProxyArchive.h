@@ -8,14 +8,14 @@
  * A proxy archive that ensures that all object reference types are stored as a SoftObjectPath.
  * Also has a utility for redirecting those references (used for redirecting spawned actors).
  */
-template<bool bIsLoading>
+template <bool bIsLoading>
 struct TSaveGameProxyArchive : public FNameAsStringProxyArchive
 {
 	TSaveGameProxyArchive(FArchive& InInnerArchive, TMap<FSoftObjectPath, FSoftObjectPath>& InRedirects)
 		: FNameAsStringProxyArchive(InInnerArchive)
-		, Redirects(InRedirects)
+		  , Redirects(InRedirects)
 	{
-		// Setting this hints a Serialize method to only serialize SaveGame properties
+		// Setting this hints a ObjSerialize method to only serialize SaveGame properties
 		ArIsSaveGame = true;
 	}
 
@@ -84,17 +84,18 @@ struct TSaveGameProxyArchive : public FNameAsStringProxyArchive
 private:
 	TMap<FSoftObjectPath, FSoftObjectPath>& Redirects;
 
-	template<typename ObjectType>
+	template <typename ObjectType>
 	static FSoftObjectPath ToSoftObjectPath(const ObjectType& Value)
 	{
 		return FSoftObjectPath(Value);
 	}
+
 	static FSoftObjectPath ToSoftObjectPath(const FWeakObjectPtr& Value)
 	{
 		return FSoftObjectPath(Value.Get());
 	}
 
-	template<typename ObjectType>
+	template <typename ObjectType>
 	FArchive& SerializeObject(ObjectType& Value)
 	{
 		FSoftObjectPath Path;

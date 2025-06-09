@@ -38,7 +38,7 @@ void FJsonOutputArchiveFormatter::EnterRecord()
 
 void FJsonOutputArchiveFormatter::LeaveRecord()
 {
-	Stack.Pop(false);
+	Stack.Pop(EAllowShrinking::No);
 }
 
 void FJsonOutputArchiveFormatter::EnterField(FArchiveFieldName Name)
@@ -219,6 +219,14 @@ void FJsonOutputArchiveFormatter::Serialize(bool& Value)
 	SetNumberValue(Value);
 }
 
+void FJsonOutputArchiveFormatter::Serialize(UTF32CHAR& Value)
+{
+	// Convert the UTF32CHAR to a UTF-8 string
+	FString Utf8String;
+	Utf8String.AppendChar(Value); // Append as FString handles appropriate encoding
+	Serialize(Utf8String);
+}
+
 void FJsonOutputArchiveFormatter::Serialize(FString& Value)
 {
 	SetValue<FJsonValueString>(Value);
@@ -231,7 +239,7 @@ void FJsonOutputArchiveFormatter::Serialize(FName& Value)
 
 void FJsonOutputArchiveFormatter::Serialize(UObject*& Value)
 {
-	Serialize(MoveTemp(Value));
+	ObjSerialize(MoveTemp(Value));
 }
 
 void FJsonOutputArchiveFormatter::Serialize(FText& Value)
@@ -241,7 +249,7 @@ void FJsonOutputArchiveFormatter::Serialize(FText& Value)
 
 void FJsonOutputArchiveFormatter::Serialize(FWeakObjectPtr& Value)
 {
-	Serialize(Value.Get());
+	ObjSerialize(Value.Get());
 }
 
 void FJsonOutputArchiveFormatter::Serialize(FSoftObjectPtr& Value)
@@ -256,12 +264,12 @@ void FJsonOutputArchiveFormatter::Serialize(FSoftObjectPath& Value)
 
 void FJsonOutputArchiveFormatter::Serialize(FLazyObjectPtr& Value)
 {
-	Serialize(Value.Get());
+	ObjSerialize(Value.Get());
 }
 
 void FJsonOutputArchiveFormatter::Serialize(FObjectPtr& Value)
 {
-	Serialize(Value.Get());
+	ObjSerialize(Value.Get());
 }
 
 void FJsonOutputArchiveFormatter::Serialize(TArray<uint8>& Value)
@@ -279,27 +287,7 @@ void FJsonOutputArchiveFormatter::Serialize(const TSharedRef<FJsonObject>& Value
 	SetValue(MakeShared<FJsonValueObject>(Value));
 }
 
-void FJsonOutputArchiveFormatter::Serialize(FTransform& Value)
-{
-	TSharedRef<FJsonObject> TransformJson = MakeShared<FJsonObject>();
-
-	TransformJson->SetNumberField(TEXT("TranslationX"), Value.GetLocation().X);
-	TransformJson->SetNumberField(TEXT("TranslationY"), Value.GetLocation().Y);
-	TransformJson->SetNumberField(TEXT("TranslationZ"), Value.GetLocation().Z);
-
-	FVector RotationVector = Value.GetRotation().Euler();
-	TransformJson->SetNumberField(TEXT("RotationPitch"), RotationVector.X);
-	TransformJson->SetNumberField(TEXT("RotationYaw"), RotationVector.Y);
-	TransformJson->SetNumberField(TEXT("RotationRoll"), RotationVector.Z);
-
-	TransformJson->SetNumberField(TEXT("ScaleX"), Value.GetScale3D().X);
-	TransformJson->SetNumberField(TEXT("ScaleY"), Value.GetScale3D().Y);
-	TransformJson->SetNumberField(TEXT("ScaleZ"), Value.GetScale3D().Z);
-
-	SetValue(MakeShared<FJsonValueObject>(TransformJson));
-}
-
-void FJsonOutputArchiveFormatter::Serialize(const UObject* Value)
+void FJsonOutputArchiveFormatter::ObjSerialize(const UObject* Value)
 {
 	if (Value)
 	{
@@ -327,7 +315,6 @@ void FJsonOutputArchiveFormatter::SetValue(const TSharedRef<FJsonValue>& Value)
 {
 	FStackObject& Current = GetCurrent();
 	check(!Current.Field.IsEmpty());
-
 
 	if (Current.bInStream)
 	{

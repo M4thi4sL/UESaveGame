@@ -50,6 +50,7 @@ public:
 	virtual void Serialize(float& Value) override;
 	virtual void Serialize(double& Value) override;
 	virtual void Serialize(bool& Value) override;
+	virtual void Serialize(UTF32CHAR& Value) override;
 	virtual void Serialize(FString& Value) override;
 	virtual void Serialize(FName& Value) override;
 	virtual void Serialize(UObject*& Value) override;
@@ -63,16 +64,16 @@ public:
 	virtual void Serialize(void* Data, uint64 DataSize) override;
 
 	void Serialize(const TSharedRef<FJsonObject>& Value);
-	void Serialize(FTransform& Value);
 
 private:
 	struct FStackObject
 	{
 		FStackObject(const TSharedRef<FJsonObject>& InObject)
 			: Object(InObject)
-			, bInAttributedValueValue(false)
-			, bInStream(false)
-		{}
+			  , bInAttributedValueValue(false)
+			  , bInStream(false)
+		{
+		}
 
 		TSharedRef<FJsonObject> Object;
 		FString Field;
@@ -85,12 +86,12 @@ private:
 	TSharedPtr<FJsonObject> RootObject;
 	TArray<FStackObject> Stack;
 
-	void Serialize(const UObject* Value);
+	void ObjSerialize(const UObject* Value);
 
-	template<typename ValueType>
+	template <typename ValueType>
 	void SetNumberValue(const ValueType& Value);
 
-	template<typename JsonValueType, typename ValueType>
+	template <typename JsonValueType, typename ValueType>
 	void SetValue(const ValueType& Value);
 
 	void SetValue(const TSharedRef<FJsonValue>& Value);

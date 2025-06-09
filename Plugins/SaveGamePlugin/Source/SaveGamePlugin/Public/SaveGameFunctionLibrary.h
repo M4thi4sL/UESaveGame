@@ -40,11 +40,11 @@ public:
 	 * @param Actor The actor whose transform will be serialized
 	 * @return true if the transform was serialized
 	 */
-	UFUNCTION(BlueprintCallable, Category="SaveGamePlugin|Serialize", meta=(DefaultToSelf="Actor"))
+	UFUNCTION(BlueprintCallable, Category="SaveGamePlugin|ObjSerialize", meta=(DefaultToSelf="Actor"))
 	static bool SerializeActorTransform(UPARAM(ref) FSaveGameArchive& Archive, AActor* Actor);
 
 	/**
-	 * Serialize a property to/from the specified archive.
+	 * ObjSerialize a property to/from the specified archive.
 	 *
 	 * OnSave: Store the value of the property to the archive (if bSave is true)
 	 * OnLoad: Read the archive, if the value exists, load by reference into the property connected to Value
@@ -54,7 +54,7 @@ public:
 	 * @param bSave If true, will save this property, otherwise not if false. Not used when loading.
 	 * @return true if the property was serialized
 	 */
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="SaveGamePlugin|Serialize", meta=(CustomStructureParam="Value", AdvancedDisplay="bSave"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="SaveGamePlugin|ObjSerialize", meta=(CustomStructureParam="Value", AdvancedDisplay="bSave"))
 	static bool SerializeItem(UPARAM(ref) FSaveGameArchive& Archive, UPARAM(ref) int32& Value, bool bSave = true);
 	DECLARE_FUNCTION(execSerializeItem);
 
@@ -68,7 +68,7 @@ public:
 	 * @param VersionEnum The enum of the version we want to serialize
 	 * @return The version that was serialized (-1 if not exist or no version)
 	 */
-	UFUNCTION(BlueprintCallable, Category="SaveGamePlugin|Serialize")
+	UFUNCTION(BlueprintCallable, Category="SaveGamePlugin|ObjSerialize")
 	static int32 UseCustomVersion(UPARAM(ref) FSaveGameArchive& Archive, const UEnum* VersionEnum);
 
 	UFUNCTION(BlueprintCallable, CustomThunk, Category="SaveGamePlugin|Threading", meta=(Variadic, CustomStructureParam="Delegate", BlueprintInternalUseOnly = "true"))

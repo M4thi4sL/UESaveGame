@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "SaveGameTypes.h"
 #include "SaveGameSubsystem.generated.h"
 
 class USaveGameSettings;
@@ -82,13 +83,19 @@ protected:
 	UPROPERTY()
 	USaveGameSettings* SaveGameSettings;
 
+	UPROPERTY(VisibleAnywhere, Category="Save Game")
+	TMap<TSoftObjectPtr<UWorld>, FWorldSaveData> WorldData;
+
+	UPROPERTY(VisibleAnywhere, Category="Save Game")
+	TSet<FSoftObjectPath> DestroyedLevelActors;
+
+	UPROPERTY(VisibleAnywhere, Category="Save Game")
+	TSet<TWeakObjectPtr<AActor>> SaveGameActors;
+
 private:
 	template <bool>
 	friend class TSaveGameSerializer;
 	UE::Tasks::FPipe SaveGamePipe = UE::Tasks::FPipe(TEXT("SaveGameSubsystem"));
-
-	TSet<FSoftObjectPath> DestroyedLevelActors;
-	TSet<TWeakObjectPtr<AActor>> SaveGameActors;
 
 	/** Holds the last known timestamp for saving/loading */
 	UPROPERTY(VisibleAnywhere, Category="Save Game")
