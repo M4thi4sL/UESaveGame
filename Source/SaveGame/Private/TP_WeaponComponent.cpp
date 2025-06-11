@@ -1,6 +1,5 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-
 #include "TP_WeaponComponent.h"
 #include "SaveGameCharacter.h"
 #include "SaveGameProjectile.h"
@@ -16,7 +15,6 @@ UTP_WeaponComponent::UTP_WeaponComponent()
 	// Default offset from the character location for projectiles to spawn
 	MuzzleOffset = FVector(100.0f, 0.0f, 10.0f);
 }
-
 
 void UTP_WeaponComponent::Fire()
 {
@@ -35,22 +33,22 @@ void UTP_WeaponComponent::Fire()
 			const FRotator SpawnRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
 			// MuzzleOffset is in camera space, so transform it to world space before offsetting from the character location to find the final muzzle position
 			const FVector SpawnLocation = GetOwner()->GetActorLocation() + SpawnRotation.RotateVector(MuzzleOffset);
-	
+
 			//Set Spawn Collision Handling Override
 			FActorSpawnParameters ActorSpawnParams;
 			ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-	
+
 			// Spawn the projectile at the muzzle
 			World->SpawnActor<ASaveGameProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
 		}
 	}
-	
+
 	// Try and play the sound if specified
 	if (FireSound != nullptr)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, FireSound, Character->GetActorLocation());
 	}
-	
+
 	// Try and play a firing animation if specified
 	if (FireAnimation != nullptr)
 	{
@@ -69,9 +67,9 @@ void UTP_WeaponComponent::AttachWeapon(ASaveGameCharacter* TargetCharacter)
 	{
 		return;
 	}
-	
+
 	Character = TargetCharacter;
-	
+
 	if (Character == nullptr)
 	{
 		return;
@@ -80,7 +78,7 @@ void UTP_WeaponComponent::AttachWeapon(ASaveGameCharacter* TargetCharacter)
 	// Attach the weapon to the First Person Character
 	FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 	AttachToComponent(Character->GetMesh1P(), AttachmentRules, FName(TEXT("GripPoint")));
-	
+
 	// switch bHasRifle so the animation blueprint can switch to another animation set
 	Character->SetHasRifle(true);
 
@@ -103,6 +101,8 @@ void UTP_WeaponComponent::AttachWeapon(ASaveGameCharacter* TargetCharacter)
 
 void UTP_WeaponComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	Super::EndPlay(EndPlayReason);
+
 	if (Character == nullptr)
 	{
 		return;

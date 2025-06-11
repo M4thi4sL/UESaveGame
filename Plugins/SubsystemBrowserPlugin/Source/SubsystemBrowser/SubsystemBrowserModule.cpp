@@ -44,20 +44,24 @@ void FSubsystemBrowserModule::StartupModule()
 
 #if !SUBSYSTEM_BROWSER_NOMAD_MODE
 
-		FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>(TEXT("LevelEditor"));
-		LevelEditorModule.OnTabManagerChanged().AddLambda([Module = this]()
+		if (FLevelEditorModule* LevelEditorModule = FModuleManager::LoadModulePtr<FLevelEditorModule>(TEXT("LevelEditor")))
 		{
-			FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>(TEXT("LevelEditor"));
-			TSharedPtr<FTabManager> LevelEditorTabManager = LevelEditorModule.GetLevelEditorTabManager();
-			if (LevelEditorTabManager.IsValid())
+			LevelEditorModule->OnTabManagerChanged().AddLambda([Module = this]()
 			{
-				LevelEditorTabManager->RegisterTabSpawner(SubsystemBrowserTabName, FOnSpawnTab::CreateRaw(Module, &FSubsystemBrowserModule::HandleSpawnBrowserTab))
-					.SetDisplayName(LOCTEXT("SubsystemBrowserTabTitle", "Subsystems"))
-					.SetTooltipText(LOCTEXT("SubsystemBrowserTabTooltip", "Open the Subsystem Browser tab."))
-					.SetGroup(WorkspaceMenu::GetMenuStructure().GetLevelEditorCategory())
-					.SetIcon(FStyleHelper::GetSlateIcon(FSubsystemBrowserStyle::PanelIconName));
-			}
-		});
+				if (FLevelEditorModule* LevelEditorModule = FModuleManager::LoadModulePtr<FLevelEditorModule>(TEXT("LevelEditor")))
+				{
+					TSharedPtr<FTabManager> LevelEditorTabManager = LevelEditorModule->GetLevelEditorTabManager();
+					if (LevelEditorTabManager.IsValid())
+					{
+						LevelEditorTabManager->RegisterTabSpawner(SubsystemBrowserTabName, FOnSpawnTab::CreateRaw(Module, &FSubsystemBrowserModule::HandleSpawnBrowserTab))
+						                     .SetDisplayName(LOCTEXT("SubsystemBrowserTabTitle", "Subsystems"))
+						                     .SetTooltipText(LOCTEXT("SubsystemBrowserTabTooltip", "Open the Subsystem Browser tab."))
+						                     .SetGroup(WorkspaceMenu::GetMenuStructure().GetLevelEditorCategory())
+						                     .SetIcon(FStyleHelper::GetSlateIcon(FSubsystemBrowserStyle::PanelIconName));
+					}
+				}
+			});
+		}
 
 #else
 
@@ -136,13 +140,13 @@ TSharedRef<SDockTab> FSubsystemBrowserModule::HandleSpawnBrowserTab(const FSpawn
 #if SUBSYSTEM_BROWSER_NOMAD_MODE
 		.TabRole(ETabRole::NomadTab)
 #endif
-	[
-		SNew(SBorder)
-		.BorderImage( FStyleHelper::GetBrush(TEXT("ToolPanel.GroupBorder")) )
 		[
-			SNew(SSubsystemBrowserPanel).InWorld(EditorWorld)
-		]
-	];
+			SNew(SBorder)
+			.BorderImage(FStyleHelper::GetBrush(TEXT("ToolPanel.GroupBorder")))
+			[
+				SNew(SSubsystemBrowserPanel).InWorld(EditorWorld)
+			]
+		];
 }
 
 void FSubsystemBrowserModule::SummonSubsystemTab()
@@ -157,7 +161,7 @@ void FSubsystemBrowserModule::SummonSubsystemTab()
 void FSubsystemBrowserModule::SummonPluginSettingsTab()
 {
 	ISettingsModule& Module = FModuleManager::GetModuleChecked<ISettingsModule>(TEXT("Settings"));
-    Module.ShowViewer(TEXT("Editor"), TEXT("Plugins"), TEXT("SubsystemBrowser"));
+	Module.ShowViewer(TEXT("Editor"), TEXT("Plugins"), TEXT("SubsystemBrowser"));
 }
 
 void FSubsystemBrowserModule::SummonSubsystemSettingsTab()

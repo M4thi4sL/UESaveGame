@@ -6,6 +6,8 @@
 
 /**
 * The save data of an individual level within a world
+* We store all the actors that implemented the save game interface
+* We also keep track of the actors that get destroyed at runtime so we can destroy them again upon loading the save data.
  */
 USTRUCT(BlueprintType)
 struct FLevelSaveData
@@ -28,5 +30,5 @@ struct FWorldSaveData
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SaveSystem")
-	TMap<TSoftObjectPtr<UWorld>, FLevelSaveData> SubLevels;
+	TMap<FName, FLevelSaveData> SubLevels;
 };
