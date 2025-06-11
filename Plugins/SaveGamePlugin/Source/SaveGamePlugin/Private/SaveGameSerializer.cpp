@@ -50,8 +50,7 @@ public:
 template <bool bIsLoading>
 class TSaveGameArchive
 {
-	using FSaveGameFormatter =
-	typename TChooseClass<USE_TEXT_FORMATTER, class FSaveGameArchiveFormatter, FBinaryArchiveFormatter>::Result;
+	using FSaveGameFormatter = std::conditional_t<USE_TEXT_FORMATTER, class FSaveGameArchiveFormatter, FBinaryArchiveFormatter>;
 
 public:
 	TSaveGameArchive(FArchive& InArchive, TMap<FSoftObjectPath, FSoftObjectPath>& InRedirects)
@@ -187,72 +186,6 @@ private:
 };
 
 template <bool bIsLoading>
-struct TSaveGameSerializer<bIsLoading>::FLevelInfo
-{
-	~FLevelInfo()
-	{
-		if (Archive)
-		{
-			delete Archive;
-			Archive = nullptr;
-		}
-
-		if (MemoryArchive)
-		{
-			delete MemoryArchive;
-			MemoryArchive = nullptr;
-		}
-	}
-
-	void CreateArchive(TArray<uint8>& InData, TMap<FSoftObjectPath, FSoftObjectPath>& InRedirects)
-	{
-		MemoryArchive = new TSaveGameMemoryArchive(InData);
-		Archive = new TSaveGameArchive<bIsLoading>(*MemoryArchive, InRedirects);
-	}
-
-	TWeakObjectPtr<ULevel> Level;
-	FString Name;
-	TArray<uint8> Data; /** This would contain the serialised LevelActors and the Destroyed ones */
-	TSaveGameArchive<bIsLoading>* Archive = nullptr;
-
-private:
-	FArchive* MemoryArchive = nullptr;
-};
-
-template <bool bIsLoading>
-struct TSaveGameSerializer<bIsLoading>::FWorldInfo
-{
-	~FWorldInfo()
-	{
-		if (Archive)
-		{
-			delete Archive;
-			Archive = nullptr;
-		}
-
-		if (MemoryArchive)
-		{
-			delete MemoryArchive;
-			MemoryArchive = nullptr;
-		}
-	}
-
-	void CreateArchive(TArray<uint8>& InData, TMap<FSoftObjectPath, FSoftObjectPath>& InRedirects)
-	{
-		MemoryArchive = new TSaveGameMemoryArchive(InData);
-		Archive = new TSaveGameArchive<bIsLoading>(*MemoryArchive, InRedirects);
-	}
-
-	TWeakObjectPtr<UWorld> World;
-	FString Name;
-	TArray<uint8> Data; /** This would contain the serialised LevelActors and the Destroyed ones */
-	TSaveGameArchive<bIsLoading>* Archive = nullptr;
-
-private:
-	FArchive* MemoryArchive = nullptr;
-};
-
-template <bool bIsLoading>
 TSaveGameSerializer<bIsLoading>::TSaveGameSerializer(USaveGameSubsystem* InSubsystem, FString SaveName)
 	: Subsystem(InSubsystem)
 	  , Archive(Data)
@@ -329,7 +262,6 @@ FTask TSaveGameSerializer<bIsLoading>::DoOperation()
 
 		PreviousTask = LaunchGameThread(UE_SOURCE_LOCATION, [this]
 		{
-			/** Should probably dump the current world we are serializing first and foremeost, then store te destroyted and actors one level deeper */
 			SerializeDestroyedActors();
 			SerializeActors();
 		}, PreviousTask);
